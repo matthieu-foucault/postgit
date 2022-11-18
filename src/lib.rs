@@ -61,20 +61,20 @@ pub fn run(args: &Args) -> Result<()> {
 
 fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
     let repo_path = Path::new(repo_path);
-    let source_path = Path::new(schema_path);
+    let schema_path = Path::new(schema_path);
 
     let repo = git_repository::open(repo_path)?;
 
-    let source_oid = ObjectId::from_str(ref_or_sha1)?;
-    let object_option = repo.try_find_object(source_oid)?;
+    let oid = ObjectId::from_str(ref_or_sha1)?;
+    let object_option = repo.try_find_object(oid)?;
     if let Some(object) = object_option {
-        let source_commit = object.try_into_commit()?;
-        let source_tree = source_commit.tree()?;
-        if let Some(source_entry) = source_tree.lookup_entry_by_path(source_path)? {
-            let source_data = &source_entry.object()?.data;
-            Ok(String::from(source_data.to_str()?))
+        let commit = object.try_into_commit()?;
+        let tree = commit.tree()?;
+        if let Some(entry) = tree.lookup_entry_by_path(schema_path)? {
+            let data = &entry.object()?.data;
+            Ok(String::from(data.to_str()?))
         } else {
-            bail!("Couldn't find entry at path {}", schema_path);
+            bail!("Couldn't find entry at path {}", schema_path.display());
         }
     } else {
         bail!("Didn't find source commit for ref {}", ref_or_sha1);
