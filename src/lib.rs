@@ -1,8 +1,10 @@
+use anyhow::{bail, Result};
 use clap::Parser;
-use std::error::Error;
-use std::io::prelude::*;
+use git_repository::bstr::ByteSlice;
+use git_repository::ObjectId;
+use std::path::Path;
 use std::process::Command;
-use std::{fs::File, path::Path};
+use std::str::FromStr;
 use tokio_postgres::NoTls;
 
 /// Migrate from source to target postgres schemas
@@ -13,13 +15,14 @@ pub struct Args {
     #[arg(long, short)]
     pub repo_path: String,
 
-    // /// Git ref where the source schema can be found
-    // #[arg(long, short)]
-    // pub source_ref: String,
+    /// Git ref where the source schema can be found
+    #[arg(long, short)]
+    pub source_ref: String,
 
-    // /// Git ref where the target schema can be found
-    // #[arg(long, short)]
-    // pub target_ref: String,
+    /// Git ref where the target schema can be found
+    #[arg(long, short)]
+    pub target_ref: String,
+
     /// Path to the source schema at the source ref
     #[arg(long)]
     pub source_path: String,
@@ -29,16 +32,16 @@ pub struct Args {
     pub target_path: String,
 }
 
-pub fn run(args: &Args) -> Result<(), Box<dyn Error>> {
-    let source_path = Path::new(&args.repo_path).join(&args.source_path);
-    let target_path = Path::new(&args.repo_path).join(&args.target_path);
+pub fn run(args: &Args) -> Result<()> {
+    let source_schema = get_schema_script(&args.repo_path, &args.source_ref, &args.source_path)?;
+    let target_schema = get_schema_script(&args.repo_path, &args.target_ref, &args.target_path)?;
 
     let source_db = String::from("postgres_vcs_source");
     create_db(&source_db)?;
     let target_db = String::from("postgres_vcs_target");
     create_db(&target_db)?;
-    run_sql_script(&source_path, &source_db)?;
-    run_sql_script(&target_path, &target_db)?;
+    run_sql_script(&source_schema, &source_db)?;
+    run_sql_script(&target_schema, &target_db)?;
 
     let output = Command::new("migra")
         .arg("postgresql:///postgres_vcs_source")
@@ -56,8 +59,30 @@ pub fn run(args: &Args) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
+    let repo_path = Path::new(repo_path);
+    let source_path = Path::new(schema_path);
+
+    let repo = git_repository::open(repo_path)?;
+
+    let source_oid = ObjectId::from_str(ref_or_sha1)?;
+    let object_option = repo.try_find_object(source_oid)?;
+    if let Some(object) = object_option {
+        let source_commit = object.try_into_commit()?;
+        let source_tree = source_commit.tree()?;
+        if let Some(source_entry) = source_tree.lookup_entry_by_path(source_path)? {
+            let source_data = &source_entry.object()?.data;
+            Ok(String::from(source_data.to_str()?))
+        } else {
+            bail!("Couldn't find entry at path {}", schema_path);
+        }
+    } else {
+        bail!("Didn't find source commit for ref {}", ref_or_sha1);
+    }
+}
+
 #[tokio::main]
-async fn create_db(db_name: &String) -> Result<(), Box<dyn Error>> {
+async fn create_db(db_name: &String) -> Result<()> {
     let (client, connection) =
         tokio_postgres::connect("host=localhost user=postgres", NoTls).await?;
 
@@ -74,7 +99,7 @@ async fn create_db(db_name: &String) -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::main]
-async fn drop_db(db_name: &String) -> Result<(), Box<dyn Error>> {
+async fn drop_db(db_name: &String) -> Result<()> {
     let (client, connection) =
         tokio_postgres::connect("host=localhost user=postgres", NoTls).await?;
 
@@ -91,7 +116,7 @@ async fn drop_db(db_name: &String) -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::main]
-async fn run_sql_script(path: &Path, db_name: &String) -> Result<(), Box<dyn Error>> {
+async fn run_sql_script(script: &str, db_name: &String) -> Result<()> {
     let connection_str = format!("host=localhost user=postgres dbname={}", db_name);
     // Connect to the database.
     let (client, connection) = tokio_postgres::connect(&connection_str, NoTls).await?;
@@ -104,15 +129,8 @@ async fn run_sql_script(path: &Path, db_name: &String) -> Result<(), Box<dyn Err
         }
     });
 
-    // Open the path in read-only mode, returns `io::Result<File>`
-    let mut file = File::open(path)?;
-
-    // Read the file contents into a string, returns `io::Result<usize>`
-    let mut s = String::new();
-    file.read_to_string(&mut s)?;
-
     // Now we can execute a simple statement that just returns its parameter.
-    client.batch_execute(&s).await?;
+    client.batch_execute(script).await?;
 
     Ok(())
 }
