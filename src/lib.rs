@@ -2,6 +2,9 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use git_repository::bstr::ByteSlice;
 use git_repository::ObjectId;
+use serde::Deserialize;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
@@ -32,24 +35,70 @@ pub struct Args {
     pub target_path: String,
 }
 
+#[derive(Deserialize)]
+struct PostgresConfig {
+    user: Option<String>,
+    dbname: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
+}
+
+impl PostgresConfig {
+    fn to_tokio_postgres_config(&self) -> tokio_postgres::Config {
+        let mut config = tokio_postgres::Config::new();
+
+        if let Some(host) = &self.host {
+            config.host(host);
+        }
+
+        if let Some(user) = &self.user {
+            config.user(user);
+        }
+
+        if let Some(dbname) = &self.dbname {
+            config.dbname(dbname);
+        }
+
+        if let Some(port) = self.port {
+            config.port(port);
+        }
+
+        config
+    }
+}
+
+#[derive(Deserialize)]
+struct DiffEngineConfig {
+    source: PostgresConfig,
+    target: PostgresConfig,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    diff_engine: DiffEngineConfig,
+    target: PostgresConfig,
+}
+
 pub fn run(args: &Args) -> Result<()> {
     let source_schema = get_schema_script(&args.repo_path, &args.source_ref, &args.source_path)?;
     let target_schema = get_schema_script(&args.repo_path, &args.target_ref, &args.target_path)?;
 
-    let source_db = String::from("postgres_vcs_source");
-    create_db(&source_db)?;
-    let target_db = String::from("postgres_vcs_target");
-    create_db(&target_db)?;
-    run_sql_script(&source_schema, &source_db)?;
-    run_sql_script(&target_schema, &target_db)?;
+    let config = get_config()?;
+    let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
+    let diff_target_tokio_config = config.diff_engine.target.to_tokio_postgres_config();
+
+    create_db(&diff_source_tokio_config)?;
+    create_db(&diff_target_tokio_config)?;
+    run_sql_script(&source_schema, &diff_source_tokio_config)?;
+    run_sql_script(&target_schema, &diff_target_tokio_config)?;
 
     let output = Command::new("migra")
         .arg("postgresql:///postgres_vcs_source")
         .arg("postgresql:///postgres_vcs_target")
         .output()?;
 
-    drop_db(&source_db)?;
-    drop_db(&target_db)?;
+    drop_db(&diff_source_tokio_config)?;
+    drop_db(&diff_target_tokio_config)?;
 
     if !output.stderr.is_empty() {
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
@@ -57,6 +106,13 @@ pub fn run(args: &Args) -> Result<()> {
     println!("{}", String::from_utf8_lossy(&output.stdout).trim());
 
     Ok(())
+}
+
+fn get_config() -> Result<Config> {
+    let mut file = File::open("./config.toml")?;
+    let mut s = String::new();
+    file.read_to_string(&mut s)?;
+    Ok(toml::from_str(s.as_str())?)
 }
 
 fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
@@ -82,9 +138,11 @@ fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> R
 }
 
 #[tokio::main]
-async fn create_db(db_name: &String) -> Result<()> {
-    let (client, connection) =
-        tokio_postgres::connect("host=localhost user=postgres", NoTls).await?;
+async fn create_db(config: &tokio_postgres::Config) -> Result<()> {
+    let mut parent_config = config.clone();
+    parent_config.dbname("postgres");
+
+    let (client, connection) = parent_config.connect(NoTls).await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -92,16 +150,18 @@ async fn create_db(db_name: &String) -> Result<()> {
         }
     });
 
-    let query = format!("create database {}", db_name);
+    let query = format!("create database {}", config.get_dbname().unwrap());
     client.batch_execute(&query).await?;
 
     Ok(())
 }
 
 #[tokio::main]
-async fn drop_db(db_name: &String) -> Result<()> {
-    let (client, connection) =
-        tokio_postgres::connect("host=localhost user=postgres", NoTls).await?;
+async fn drop_db(config: &tokio_postgres::Config) -> Result<()> {
+    let mut parent_config = config.clone();
+    parent_config.dbname("postgres");
+
+    let (client, connection) = parent_config.connect(NoTls).await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -109,17 +169,16 @@ async fn drop_db(db_name: &String) -> Result<()> {
         }
     });
 
-    let query = format!("drop database {}", db_name);
+    let query = format!("drop database {}", config.get_dbname().unwrap());
     client.batch_execute(&query).await?;
 
     Ok(())
 }
 
 #[tokio::main]
-async fn run_sql_script(script: &str, db_name: &String) -> Result<()> {
-    let connection_str = format!("host=localhost user=postgres dbname={}", db_name);
+async fn run_sql_script(script: &str, config: &tokio_postgres::Config) -> Result<()> {
     // Connect to the database.
-    let (client, connection) = tokio_postgres::connect(&connection_str, NoTls).await?;
+    let (client, connection) = config.connect(NoTls).await?;
 
     // The connection object performs the actual communication with the database,
     // so spawn it off to run on its own.
