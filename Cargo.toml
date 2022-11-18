@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0.26", features = ["derive"] }
+tokio = {version = "1.21.2", features = ["rt", "rt-multi-thread", "macros"]}
+tokio-postgres = "0.7.7"
