@@ -45,6 +45,9 @@ pub fn run(args: &Args) -> Result<(), Box<dyn Error>> {
         .arg("postgresql:///postgres_vcs_target")
         .output()?;
 
+    drop_db(&source_db)?;
+    drop_db(&target_db)?;
+
     if !output.stderr.is_empty() {
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
     }
@@ -65,6 +68,23 @@ async fn create_db(db_name: &String) -> Result<(), Box<dyn Error>> {
     });
 
     let query = format!("create database {}", db_name);
+    client.batch_execute(&query).await?;
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn drop_db(db_name: &String) -> Result<(), Box<dyn Error>> {
+    let (client, connection) =
+        tokio_postgres::connect("host=localhost user=postgres", NoTls).await?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+
+    let query = format!("drop database {}", db_name);
     client.batch_execute(&query).await?;
 
     Ok(())
