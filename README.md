@@ -1,4 +1,4 @@
-# postgres-schema-vcs
+# PostGit
 
 POC - Use the power of Git for PostgreSQL schema migrations
 

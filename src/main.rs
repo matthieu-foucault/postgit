@@ -1,11 +1,11 @@
 use clap::Parser;
-use postgres_schema_vcs::Args;
+use postgit::Args;
 use std::process;
 
 fn main() {
     let args = Args::parse();
 
-    if let Err(e) = postgres_schema_vcs::run(&args) {
+    if let Err(e) = postgit::run(&args) {
         eprintln!("Application error: {e}");
         process::exit(1);
     }
