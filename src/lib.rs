@@ -65,6 +65,33 @@ impl PostgresConfig {
 
         config
     }
+
+    fn to_url(&self) -> String {
+        let mut url = "postgresql://".to_owned();
+
+        if let Some(user) = &self.user {
+            url.push_str(user);
+            url.push('@')
+        }
+
+        if let Some(host) = &self.host {
+            url.push_str(host);
+        } else {
+            url.push_str("localhost");
+        }
+
+        if let Some(port) = self.port {
+            url.push(':');
+            url.push_str(&port.to_string());
+        }
+
+        if let Some(dbname) = &self.dbname {
+            url.push('/');
+            url.push_str(dbname);
+        }
+
+        url
+    }
 }
 
 #[derive(Deserialize)]
@@ -93,8 +120,8 @@ pub fn run(args: &Args) -> Result<()> {
     run_sql_script(&target_schema, &diff_target_tokio_config)?;
 
     let output = Command::new("migra")
-        .arg("postgresql:///postgres_vcs_source")
-        .arg("postgresql:///postgres_vcs_target")
+        .arg(config.diff_engine.source.to_url())
+        .arg(config.diff_engine.target.to_url())
         .output()?;
 
     drop_db(&diff_source_tokio_config)?;
