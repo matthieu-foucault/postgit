@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use git_repository::bstr::ByteSlice;
 use git_repository::ObjectId;
 use serde::Deserialize;
@@ -10,29 +10,41 @@ use std::process::Command;
 use std::str::FromStr;
 use tokio_postgres::NoTls;
 
-/// Migrate from source to target postgres schemas
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+#[command(propagate_version = true)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+/// Migrate from source to target postgres schemas
+#[derive(Args)]
+pub struct DiffArgs {
     /// Path to the root of the git repository
-    #[arg(long, short)]
+    #[arg(long, short, default_value = ".")]
     pub repo_path: String,
 
     /// Git ref where the source schema can be found
     #[arg(long, short)]
-    pub source_ref: String,
+    pub from: String,
 
     /// Git ref where the target schema can be found
     #[arg(long, short)]
-    pub target_ref: String,
+    pub to: String,
 
-    /// Path to the source schema at the source ref
+    /// Path to the source schema at the source ref, if different from the target path
     #[arg(long)]
-    pub source_path: String,
+    pub source_path: Option<String>,
 
-    /// Path to the target schema at the target ref
-    #[arg(long)]
-    pub target_path: String,
+    /// Path to the schema
+    pub path: String,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Shows the migration diff between two schemas
+    Diff(DiffArgs),
 }
 
 #[derive(Deserialize)]
@@ -106,9 +118,14 @@ struct Config {
     target: PostgresConfig,
 }
 
-pub fn run(args: &Args) -> Result<()> {
-    let source_schema = get_schema_script(&args.repo_path, &args.source_ref, &args.source_path)?;
-    let target_schema = get_schema_script(&args.repo_path, &args.target_ref, &args.target_path)?;
+pub fn run(args: &DiffArgs) -> Result<()> {
+    let source_path = match &args.source_path {
+        Some(path) => path,
+        None => &args.path,
+    };
+
+    let source_schema = get_schema_script(&args.repo_path, &args.from, source_path)?;
+    let target_schema = get_schema_script(&args.repo_path, &args.to, &args.path)?;
 
     let config = get_config()?;
     let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();

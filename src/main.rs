@@ -1,12 +1,16 @@
 use clap::Parser;
-use postgit::Args;
+use postgit::{Cli, Commands};
 use std::process;
 
 fn main() {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
-    if let Err(e) = postgit::run(&args) {
-        eprintln!("Application error: {e}");
-        process::exit(1);
+    match &cli.command {
+        Commands::Diff(args) => {
+            if let Err(e) = postgit::run(args) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
     }
 }
