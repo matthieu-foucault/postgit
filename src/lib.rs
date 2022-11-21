@@ -147,6 +147,10 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
     let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
     let diff_target_tokio_config = config.diff_engine.target.to_tokio_postgres_config();
 
+    // drop temporary dbs in case they were left over from a previous run
+    drop_db(&diff_source_tokio_config)?;
+    drop_db(&diff_target_tokio_config)?;
+
     create_db(&diff_source_tokio_config)?;
     create_db(&diff_target_tokio_config)?;
     run_sql_script(&source_schema, &diff_source_tokio_config)?;
@@ -155,6 +159,7 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
     let output = Command::new("migra")
         .arg(config.diff_engine.source.to_url())
         .arg(config.diff_engine.target.to_url())
+        .arg("--unsafe")
         .output()?;
 
     drop_db(&diff_source_tokio_config)?;
@@ -220,7 +225,10 @@ async fn drop_db(config: &tokio_postgres::Config) -> Result<()> {
         }
     });
 
-    let query = format!("drop database {}", config.get_dbname().unwrap());
+    let query = format!(
+        "drop database if exists {} (force)",
+        config.get_dbname().unwrap()
+    );
     client.batch_execute(&query).await?;
 
     Ok(())
