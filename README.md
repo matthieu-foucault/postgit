@@ -24,3 +24,20 @@ Options:
 - `-f`, `--from <FROM>` Git commit where the source schema can be found
 - `-t`, `--to <TO>` Git commit where the target schema can be found
 - `--source-path <SOURCE_PATH>` Path to the source schema at the source ref, if different from the target path
+
+### Push command
+
+Applies the migration between two committed SQL files onto the target database
+
+`postgit push [OPTIONS] --from <FROM> --to <TO> <PATH>`
+
+Arguments:
+`<PATH>` Path to the schema file
+
+Options:
+
+- `-r`, `--repo-path <REPO_PATH>` Path to the root of the git repository `[default: .]`
+
+- `-f`, `--from <FROM>` Git commit where the source schema can be found
+- `-t`, `--to <TO>` Git commit where the target schema can be found
+- `--source-path <SOURCE_PATH>` Path to the source schema at the source ref, if different from the target path

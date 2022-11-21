@@ -45,6 +45,8 @@ pub struct DiffArgs {
 pub enum Commands {
     /// Shows the migration diff between two schemas
     Diff(DiffArgs),
+    /// Calculates the migration diff between two schemas and applies it to the target database
+    Push(DiffArgs),
 }
 
 #[derive(Deserialize)]
@@ -113,12 +115,27 @@ struct DiffEngineConfig {
 }
 
 #[derive(Deserialize)]
-struct Config {
+pub struct Config {
     diff_engine: DiffEngineConfig,
     target: PostgresConfig,
 }
 
-pub fn run(args: &DiffArgs) -> Result<()> {
+impl Config {
+    pub fn build() -> Result<Config> {
+        let mut file = File::open("./config.toml")?;
+        let mut s = String::new();
+        file.read_to_string(&mut s)?;
+        Ok(toml::from_str(s.as_str())?)
+    }
+}
+
+pub fn apply_diff(args: &DiffArgs, config: &Config) -> Result<()> {
+    let diff_string = get_diff_string(args, config)?;
+    let target_tokio_config = config.target.to_tokio_postgres_config();
+    run_sql_script(&diff_string, &target_tokio_config)
+}
+
+pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
     let source_path = match &args.source_path {
         Some(path) => path,
         None => &args.path,
@@ -127,7 +144,6 @@ pub fn run(args: &DiffArgs) -> Result<()> {
     let source_schema = get_schema_script(&args.repo_path, &args.from, source_path)?;
     let target_schema = get_schema_script(&args.repo_path, &args.to, &args.path)?;
 
-    let config = get_config()?;
     let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
     let diff_target_tokio_config = config.diff_engine.target.to_tokio_postgres_config();
 
@@ -145,18 +161,9 @@ pub fn run(args: &DiffArgs) -> Result<()> {
     drop_db(&diff_target_tokio_config)?;
 
     if !output.stderr.is_empty() {
-        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        bail!("{}", String::from_utf8_lossy(&output.stderr));
     }
-    println!("{}", String::from_utf8_lossy(&output.stdout).trim());
-
-    Ok(())
-}
-
-fn get_config() -> Result<Config> {
-    let mut file = File::open("./config.toml")?;
-    let mut s = String::new();
-    file.read_to_string(&mut s)?;
-    Ok(toml::from_str(s.as_str())?)
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {

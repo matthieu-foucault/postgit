@@ -13,7 +13,7 @@ port=5432
 user='postgres'
 
 [target]
-dbname='mydb'
+dbname='postgit_test'
 host='localhost'
 port=5432
 user='postgres'
