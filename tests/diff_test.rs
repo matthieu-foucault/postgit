@@ -8,9 +8,35 @@ struct Repo {
     commits: Vec<String>,
 }
 
+fn commit_all(repo_path: &str) -> String {
+    Command::new("git")
+        .arg("add")
+        .arg(".")
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .arg("commit")
+        .arg("-m")
+        .arg("some message")
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
 fn setup() -> Repo {
     let repo_path = tempdir().unwrap().into_path();
-    let repo_path_string = repo_path.to_str().unwrap().to_owned();
+    let mut commits: Vec<String> = vec![];
     let mut schema_file_path = repo_path.clone();
     schema_file_path.push("schema.sql");
 
@@ -18,7 +44,7 @@ fn setup() -> Repo {
         .arg("init")
         .current_dir(&repo_path)
         .output()
-        .expect("failed to execute process");
+        .unwrap();
 
     fs::write(
         &schema_file_path,
@@ -30,30 +56,11 @@ fn setup() -> Repo {
           email text
         );"#,
     )
-    .expect("couldn't write to file");
+    .unwrap();
 
-    Command::new("git")
-        .arg("add")
-        .arg("schema.sql")
-        .current_dir(&repo_path)
-        .output()
-        .expect("failed to execute process");
+    commits.push(commit_all(repo_path.to_str().unwrap()));
 
-    Command::new("git")
-        .arg("commit")
-        .arg("-m")
-        .arg("first commit")
-        .current_dir(&repo_path)
-        .output()
-        .expect("failed to execute process");
-
-    let first_commit = Command::new("git")
-        .arg("rev-parse")
-        .arg("HEAD")
-        .current_dir(&repo_path)
-        .output()
-        .unwrap();
-
+    // add not null constraint to email
     fs::write(
         &schema_file_path,
         r#"create schema my_app;
@@ -64,31 +71,45 @@ fn setup() -> Repo {
             email text not null
           );"#,
     )
-    .expect("couldn't write to file");
+    .unwrap();
 
-    Command::new("git")
-        .arg("commit")
-        .arg("-am")
-        .arg("second commit")
-        .current_dir(&repo_path)
-        .output()
-        .expect("failed to execute process");
+    commits.push(commit_all(repo_path.to_str().unwrap()));
 
-    let second_commit = Command::new("git")
-        .arg("rev-parse")
-        .arg("HEAD")
-        .current_dir(&repo_path)
-        .output()
-        .unwrap();
+    fs::remove_file(&schema_file_path).unwrap();
 
-    let commits: Vec<String> = vec![
-        String::from_utf8_lossy(&first_commit.stdout)
-            .trim()
-            .to_string(),
-        String::from_utf8_lossy(&second_commit.stdout)
-            .trim()
-            .to_string(),
-    ];
+    fs::create_dir(repo_path.join("schema")).unwrap();
+
+    fs::write(
+        repo_path.join("schema/schema.sql"),
+        r#"create schema my_app;
+          create table my_app.user (
+            id int primary key generated always as identity,
+            given_name text,
+            family_name text,
+            email text not null
+          );"#,
+    )
+    .unwrap();
+
+    fs::write(
+        repo_path.join("schema/001_schema.sql"),
+        "create schema my_app;",
+    )
+    .unwrap();
+
+    fs::write(
+        repo_path.join("schema/002_user.sql"),
+        r#"
+          create table my_app.user (
+            id int primary key generated always as identity,
+            given_name text not null,
+            family_name text,
+            email text not null
+          );"#,
+    )
+    .unwrap();
+
+    commits.push(commit_all(repo_path.to_str().unwrap()));
 
     Repo {
         repo_path: repo_path.to_str().unwrap().to_string(),
@@ -149,6 +170,24 @@ fn it_handles_directories() {
     let diff_string = postgit::get_diff_string(&args, &config).unwrap();
     assert_eq!(
         r#"alter table "my_app"."user" alter column "email" set not null;"#,
+        diff_string
+    );
+}
+
+fn it_handles_multiple_files() {
+    let repo = setup();
+    let config = Config::build().unwrap();
+    let args = DiffArgs {
+        from: repo.commits[1].to_owned(),
+        to: repo.commits[2].to_owned(),
+        path: String::from("./schema"),
+        repo_path: repo.repo_path,
+        source_path: Some(String::from("./")),
+    };
+
+    let diff_string = postgit::get_diff_string(&args, &config).unwrap();
+    assert_eq!(
+        r#"alter table "my_app"."user" alter column "given_name" set not null;"#,
         diff_string
     );
 }
