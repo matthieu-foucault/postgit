@@ -9,10 +9,13 @@ edition = "2021"
 anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }
 git-repository = "0.28.0"
+notify = "5.0.0"
+notify-debouncer-mini = "0.2.1"
 serde = { version = "1.0.147", features = ["derive"] }
 tokio = {version = "1.21.2", features = ["rt", "rt-multi-thread", "macros"]}
 tokio-postgres = "0.7.7"
 toml = "0.5.9"
+walkdir = "2.3.2"
 
 [dev-dependencies]
 tempfile = "3.3.0"

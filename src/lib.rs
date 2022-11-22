@@ -4,13 +4,18 @@ use git_repository::bstr::ByteSlice;
 use git_repository::objs::tree::EntryMode;
 use git_repository::traverse::tree::Recorder;
 use git_repository::ObjectId;
+use notify::RecursiveMode;
+use notify_debouncer_mini::new_debouncer;
 use serde::Deserialize;
-use std::fs::File;
+use std::ffi::OsStr;
+use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
+use std::time::Duration;
 use tokio_postgres::NoTls;
+use walkdir::WalkDir;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -20,7 +25,6 @@ pub struct Cli {
     pub command: Commands,
 }
 
-/// Migrate from source to target postgres schemas
 #[derive(Args)]
 pub struct DiffArgs {
     /// Path to the root of the git repository
@@ -43,12 +47,20 @@ pub struct DiffArgs {
     pub path: String,
 }
 
+#[derive(Args)]
+pub struct WatchArgs {
+    /// Path to the directory to watch
+    pub path: String,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Shows the migration diff between two schemas
     Diff(DiffArgs),
     /// Calculates the migration diff between two schemas and applies it to the target database
     Push(DiffArgs),
+    /// Watches a directory and applies the migrations to the target database
+    Watch(WatchArgs),
 }
 
 #[derive(Deserialize)]
@@ -158,19 +170,65 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
     run_sql_script(&source_schema, &diff_source_tokio_config)?;
     run_sql_script(&target_schema, &diff_target_tokio_config)?;
 
-    let output = Command::new("migra")
-        .arg(config.diff_engine.source.to_url())
-        .arg(config.diff_engine.target.to_url())
-        .arg("--unsafe")
-        .output()?;
+    let diff = run_migra(&config.diff_engine.source, &config.diff_engine.target)?;
 
     drop_db(&diff_source_tokio_config)?;
     drop_db(&diff_target_tokio_config)?;
 
+    Ok(diff)
+}
+
+fn run_migra(source: &PostgresConfig, target: &PostgresConfig) -> Result<String> {
+    let output = Command::new("migra")
+        .arg(source.to_url())
+        .arg(target.to_url())
+        .arg("--unsafe")
+        .output()?;
     if !output.stderr.is_empty() {
         bail!("{}", String::from_utf8_lossy(&output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let mut debouncer = new_debouncer(Duration::from_secs(1), None, tx)?;
+
+    let path = Path::new(&args.path);
+    let sql_extension = Some(OsStr::new("sql"));
+
+    println!("watching {} ...", &args.path);
+    debouncer.watcher().watch(path, RecursiveMode::Recursive)?;
+
+    // just print all events, this blocks forever
+    for e in rx.into_iter().flatten() {
+        if e.iter()
+            .any(|event| event.path.extension() == sql_extension)
+        {
+            println!("Deploying changes");
+            let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
+            drop_db(&diff_source_tokio_config)?;
+            create_db(&diff_source_tokio_config)?;
+
+            let mut source_schema = String::new();
+
+            for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
+                if entry.path().extension() == sql_extension {
+                    source_schema += &fs::read_to_string(entry.path())?;
+                }
+            }
+
+            run_sql_script(&source_schema, &diff_source_tokio_config)?;
+
+            let diff = run_migra(&config.target, &config.diff_engine.source)?;
+
+            let target_tokio_config = config.target.to_tokio_postgres_config();
+            run_sql_script(&diff, &target_tokio_config)?;
+        }
+    }
+
+    Ok(())
 }
 
 fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {

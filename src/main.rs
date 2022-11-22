@@ -28,5 +28,11 @@ fn main() {
                 process::exit(1);
             }
         }
+        Commands::Watch(args) => {
+            if let Err(e) = postgit::watch(args, &config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
     }
 }
