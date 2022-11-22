@@ -173,7 +173,10 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
 
 fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
     let repo_path = Path::new(repo_path);
-    let schema_path = Path::new(schema_path);
+    let mut schema_path = Path::new(schema_path);
+    if let Ok(p) = schema_path.strip_prefix("./") {
+        schema_path = p
+    }
 
     let repo = git_repository::open(repo_path)?;
 

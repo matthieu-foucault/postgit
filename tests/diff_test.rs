@@ -3,8 +3,12 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
-#[test]
-fn it_returns_diff_string() {
+struct Repo {
+    repo_path: String,
+    commits: Vec<String>,
+}
+
+fn setup() -> Repo {
     let repo_path = tempdir().unwrap().into_path();
     let repo_path_string = repo_path.to_str().unwrap().to_owned();
     let mut schema_file_path = repo_path.clone();
@@ -77,17 +81,69 @@ fn it_returns_diff_string() {
         .output()
         .unwrap();
 
+    let commits: Vec<String> = vec![
+        String::from_utf8_lossy(&first_commit.stdout)
+            .trim()
+            .to_string(),
+        String::from_utf8_lossy(&second_commit.stdout)
+            .trim()
+            .to_string(),
+    ];
+
+    Repo {
+        repo_path: repo_path.to_str().unwrap().to_string(),
+        commits,
+    }
+}
+
+#[test]
+fn it_returns_diff_string() {
+    let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
-        from: String::from_utf8_lossy(&first_commit.stdout)
-            .trim()
-            .to_string(),
-        to: String::from_utf8_lossy(&second_commit.stdout)
-            .trim()
-            .to_string(),
+        from: repo.commits[0].to_owned(),
+        to: repo.commits[1].to_owned(),
         path: String::from("schema.sql"),
-        repo_path: repo_path_string,
-        source_path: Some(String::from("schema.sql")),
+        repo_path: repo.repo_path,
+        source_path: None,
+    };
+
+    let diff_string = postgit::get_diff_string(&args, &config).unwrap();
+    assert_eq!(
+        r#"alter table "my_app"."user" alter column "email" set not null;"#,
+        diff_string
+    );
+}
+
+#[test]
+fn it_handles_relative_path() {
+    let repo = setup();
+    let config = Config::build().unwrap();
+    let args = DiffArgs {
+        from: repo.commits[0].to_owned(),
+        to: repo.commits[1].to_owned(),
+        path: String::from("./schema.sql"),
+        repo_path: repo.repo_path,
+        source_path: None,
+    };
+
+    let diff_string = postgit::get_diff_string(&args, &config).unwrap();
+    assert_eq!(
+        r#"alter table "my_app"."user" alter column "email" set not null;"#,
+        diff_string
+    );
+}
+
+#[test]
+fn it_handles_directories() {
+    let repo = setup();
+    let config = Config::build().unwrap();
+    let args = DiffArgs {
+        from: repo.commits[0].to_owned(),
+        to: repo.commits[1].to_owned(),
+        path: String::from("./"),
+        repo_path: repo.repo_path,
+        source_path: None,
     };
 
     let diff_string = postgit::get_diff_string(&args, &config).unwrap();
