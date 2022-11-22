@@ -15,7 +15,7 @@ Prints the migration between two committed SQL files
 `postgit diff [OPTIONS] --from <FROM> --to <TO> <PATH>`
 
 Arguments:
-`<PATH>` Path to the schema file
+`<PATH>` Path to the schema file or directory, relative to the repo root
 
 Options:
 
@@ -32,7 +32,7 @@ Applies the migration between two committed SQL files onto the target database
 `postgit push [OPTIONS] --from <FROM> --to <TO> <PATH>`
 
 Arguments:
-`<PATH>` Path to the schema file
+`<PATH>` Path to the schema file or directory, relative to the repo root
 
 Options:
 

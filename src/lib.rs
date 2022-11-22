@@ -1,6 +1,8 @@
 use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
 use git_repository::bstr::ByteSlice;
+use git_repository::objs::tree::EntryMode;
+use git_repository::traverse::tree::Recorder;
 use git_repository::ObjectId;
 use serde::Deserialize;
 use std::fs::File;
@@ -37,7 +39,7 @@ pub struct DiffArgs {
     #[arg(long)]
     pub source_path: Option<String>,
 
-    /// Path to the schema
+    /// Path to the schema file or directory, relative to the repo root
     pub path: String,
 }
 
@@ -185,11 +187,19 @@ fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> R
     if let Some(object) = object_option {
         let commit = object.try_into_commit()?;
         let tree = commit.tree()?;
-        let object_iter = tree
+
+        let mut recorder = Recorder::default();
+
+        tree.traverse().breadthfirst::<Recorder>(&mut recorder)?;
+
+        let object_iter = recorder
+            .records
             .iter()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.filename().to_path().unwrap().starts_with(schema_path))
-            .map(|e| e.id().object())
+            .filter(|entry| {
+                matches!(entry.mode, EntryMode::Blob)
+                    && entry.filepath.to_path().unwrap().starts_with(schema_path)
+            })
+            .map(|entry| repo.find_object(entry.oid))
             .filter_map(Result::ok);
 
         let mut script = String::new();

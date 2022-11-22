@@ -80,18 +80,6 @@ fn setup() -> Repo {
     fs::create_dir(repo_path.join("schema")).unwrap();
 
     fs::write(
-        repo_path.join("schema/schema.sql"),
-        r#"create schema my_app;
-          create table my_app.user (
-            id int primary key generated always as identity,
-            given_name text,
-            family_name text,
-            email text not null
-          );"#,
-    )
-    .unwrap();
-
-    fs::write(
         repo_path.join("schema/001_schema.sql"),
         "create schema my_app;",
     )
@@ -174,13 +162,14 @@ fn it_handles_directories() {
     );
 }
 
+#[test]
 fn it_handles_multiple_files() {
     let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
         from: repo.commits[1].to_owned(),
         to: repo.commits[2].to_owned(),
-        path: String::from("./schema"),
+        path: String::from("./schema/"),
         repo_path: repo.repo_path,
         source_path: Some(String::from("./")),
     };
