@@ -185,12 +185,19 @@ fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> R
     if let Some(object) = object_option {
         let commit = object.try_into_commit()?;
         let tree = commit.tree()?;
-        if let Some(entry) = tree.lookup_entry_by_path(schema_path)? {
-            let data = &entry.object()?.data;
-            Ok(String::from(data.to_str()?))
-        } else {
-            bail!("Couldn't find entry at path {}", schema_path.display());
+        let object_iter = tree
+            .iter()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.filename().to_path().unwrap().starts_with(schema_path))
+            .map(|e| e.id().object())
+            .filter_map(Result::ok);
+
+        let mut script = String::new();
+        for object in object_iter {
+            script.push_str(object.data.to_str()?);
         }
+
+        Ok(script)
     } else {
         bail!("Didn't find source commit for ref {}", ref_or_sha1);
     }
