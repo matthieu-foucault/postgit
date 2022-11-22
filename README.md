@@ -41,3 +41,12 @@ Options:
 - `-f`, `--from <FROM>` Git commit where the source schema can be found
 - `-t`, `--to <TO>` Git commit where the target schema can be found
 - `--source-path <SOURCE_PATH>` Path to the source schema at the source ref, if different from the target path
+
+### Watch command
+
+Watches a directory and applies the migrations to the target database
+
+Usage: `postgit watch <PATH>`
+
+Arguments:
+`<PATH>` Path to the directory to watch
