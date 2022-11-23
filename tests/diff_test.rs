@@ -110,7 +110,7 @@ fn it_returns_diff_string() {
     let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
-        from: repo.commits[0].to_owned(),
+        from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
         path: String::from("schema.sql"),
         repo_path: repo.repo_path,
@@ -129,7 +129,7 @@ fn it_handles_relative_path() {
     let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
-        from: repo.commits[0].to_owned(),
+        from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
         path: String::from("./schema.sql"),
         repo_path: repo.repo_path,
@@ -148,7 +148,7 @@ fn it_handles_directories() {
     let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
-        from: repo.commits[0].to_owned(),
+        from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
         path: String::from("./"),
         repo_path: repo.repo_path,
@@ -167,7 +167,7 @@ fn it_handles_multiple_files() {
     let repo = setup();
     let config = Config::build().unwrap();
     let args = DiffArgs {
-        from: repo.commits[1].to_owned(),
+        from: Some(repo.commits[1].to_owned()),
         to: repo.commits[2].to_owned(),
         path: String::from("./schema/"),
         repo_path: repo.repo_path,

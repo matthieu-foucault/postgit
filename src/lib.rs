@@ -31,9 +31,10 @@ pub struct DiffArgs {
     #[arg(long, short, default_value = ".")]
     pub repo_path: String,
 
-    /// Git ref where the source schema can be found
+    /// Git ref where the source schema can be found.
+    /// This may be omitted for the first migration, when the database is empty
     #[arg(long, short)]
-    pub from: String,
+    pub from: Option<String>,
 
     /// Git ref where the target schema can be found
     #[arg(long, short)]
@@ -155,7 +156,11 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
         None => &args.path,
     };
 
-    let source_schema = get_schema_script(&args.repo_path, &args.from, source_path)?;
+    let source_schema_option = match &args.from {
+        Some(from) => Some(get_schema_script(&args.repo_path, from, source_path)?),
+        None => None,
+    };
+
     let target_schema = get_schema_script(&args.repo_path, &args.to, &args.path)?;
 
     let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
@@ -167,7 +172,10 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
 
     create_db(&diff_source_tokio_config)?;
     create_db(&diff_target_tokio_config)?;
-    run_sql_script(&source_schema, &diff_source_tokio_config)?;
+    if let Some(source_schema) = source_schema_option {
+        run_sql_script(&source_schema, &diff_source_tokio_config)?;
+    }
+
     run_sql_script(&target_schema, &diff_target_tokio_config)?;
 
     let diff = run_migra(&config.diff_engine.source, &config.diff_engine.target)?;
