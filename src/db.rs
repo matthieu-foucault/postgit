@@ -45,7 +45,7 @@ pub async fn drop_db(config: &tokio_postgres::Config) -> Result<()> {
 #[tokio::main]
 pub async fn run_sql_script(script: &str, config: &tokio_postgres::Config) -> Result<()> {
     // Connect to the database.
-    let (client, connection) = config.connect(NoTls).await?;
+    let (mut client, connection) = config.connect(NoTls).await?;
 
     // The connection object performs the actual communication with the database,
     // so spawn it off to run on its own.
@@ -56,7 +56,9 @@ pub async fn run_sql_script(script: &str, config: &tokio_postgres::Config) -> Re
     });
 
     // Now we can execute a simple statement that just returns its parameter.
-    client.batch_execute(script).await?;
+    let transaction = client.transaction().await?;
+    transaction.batch_execute(script).await?;
+    transaction.commit().await?;
 
     Ok(())
 }
