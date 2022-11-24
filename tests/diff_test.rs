@@ -1,4 +1,4 @@
-use postgit::{self, Config, DiffArgs};
+use postgit::{self, config::Config, DiffArgs};
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;

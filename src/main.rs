@@ -1,5 +1,5 @@
 use clap::Parser;
-use postgit::{Cli, Commands, Config};
+use postgit::{config::Config, Cli, Commands};
 use std::process;
 
 fn main() {
