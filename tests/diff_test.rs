@@ -180,3 +180,22 @@ fn it_handles_multiple_files() {
         diff_string
     );
 }
+
+#[test]
+fn it_handles_revision_specs() {
+    let repo = setup();
+    let config = Config::build().unwrap();
+    let args = DiffArgs {
+        from: Some("HEAD^1".to_string()),
+        to: "HEAD".to_string(),
+        path: String::from("./schema/"),
+        repo_path: repo.repo_path,
+        source_path: Some(String::from("./")),
+    };
+
+    let diff_string = postgit::get_diff_string(&args, &config).unwrap();
+    assert_eq!(
+        r#"alter table "my_app"."user" alter column "given_name" set not null;"#,
+        diff_string
+    );
+}

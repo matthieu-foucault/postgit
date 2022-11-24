@@ -14,12 +14,12 @@ pub struct DiffArgs {
     #[arg(long, short, default_value = ".")]
     pub repo_path: String,
 
-    /// Git ref where the source schema can be found.
+    /// Git revision where the source schema can be found.
     /// This may be omitted for the first migration, when the database is empty
     #[arg(long, short)]
     pub from: Option<String>,
 
-    /// Git ref where the target schema can be found
+    /// Git revision where the target schema can be found.
     #[arg(long, short)]
     pub to: String,
 

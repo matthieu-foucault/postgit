@@ -4,8 +4,7 @@ use anyhow::{bail, Result};
 use git_repository::bstr::ByteSlice;
 use git_repository::objs::tree::EntryMode;
 use git_repository::traverse::tree::Recorder;
-use git_repository::ObjectId;
-use std::str::FromStr;
+use git_repository::{Commit, Repository};
 
 pub fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
     let repo_path = Path::new(repo_path);
@@ -15,11 +14,9 @@ pub fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) 
     }
 
     let repo = git_repository::open(repo_path)?;
+    let commit_option = try_find_commit(&repo, ref_or_sha1)?;
 
-    let oid = ObjectId::from_str(ref_or_sha1)?;
-    let object_option = repo.try_find_object(oid)?;
-    if let Some(object) = object_option {
-        let commit = object.try_into_commit()?;
+    if let Some(commit) = commit_option {
         let tree = commit.tree()?;
 
         let mut recorder = Recorder::default();
@@ -44,5 +41,19 @@ pub fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) 
         Ok(script)
     } else {
         bail!("Didn't find source commit for ref {}", ref_or_sha1);
+    }
+}
+
+fn try_find_commit<'repo>(
+    repo: &'repo Repository,
+    ref_or_sha1: &str,
+) -> Result<Option<Commit<'repo>>> {
+    let object_option = repo.rev_parse_single(ref_or_sha1)?.object();
+
+    if let Ok(object) = object_option {
+        let commit = object.try_into_commit()?;
+        Ok(Some(commit))
+    } else {
+        Ok(None)
     }
 }
