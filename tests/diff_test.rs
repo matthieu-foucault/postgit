@@ -1,13 +1,49 @@
+#![feature(thread_id_value)]
 use git_repository::bstr::ByteSlice;
-use postgit::{self, config::Config, DiffArgs};
+use postgit::config::*;
+use postgit::{self, DiffArgs};
 use std::fs;
 use std::process::Command;
+use std::thread;
 use tempfile::tempdir;
 
 #[derive(Debug)]
 struct Repo {
     repo_path: String,
     commits: Vec<String>,
+}
+
+fn get_config() -> Config {
+    let thread_id = thread::current().id().as_u64();
+    let config: Config = toml::from_str(
+        format!(
+            "
+[diff_engine]
+
+[diff_engine.source]
+dbname='postgres_vcs_source_{thread_id}'
+host='localhost'
+port=5432
+user='postgres'
+
+[diff_engine.target]
+dbname='postgres_vcs_target_{thread_id}'
+host='localhost'
+port=5432
+user='postgres'
+
+[target]
+dbname='postgit_test_{thread_id}'
+host='localhost'
+port=5432
+user='postgres'
+    ",
+            thread_id = thread_id
+        )
+        .as_str(),
+    )
+    .unwrap();
+    config
 }
 
 fn commit_all(repo_path: &str) -> String {
@@ -133,7 +169,7 @@ fn setup() -> Repo {
 fn it_returns_diff_string() {
     let repo = setup();
     println!("Repo created: {repo:?}");
-    let config = Config::build().unwrap();
+    let config = get_config();
     let args = DiffArgs {
         from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
@@ -152,7 +188,7 @@ fn it_returns_diff_string() {
 #[test]
 fn it_handles_relative_path() {
     let repo = setup();
-    let config = Config::build().unwrap();
+    let config = get_config();
     let args = DiffArgs {
         from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
@@ -171,7 +207,7 @@ fn it_handles_relative_path() {
 #[test]
 fn it_handles_directories() {
     let repo = setup();
-    let config = Config::build().unwrap();
+    let config = get_config();
     let args = DiffArgs {
         from: Some(repo.commits[0].to_owned()),
         to: repo.commits[1].to_owned(),
@@ -190,7 +226,7 @@ fn it_handles_directories() {
 #[test]
 fn it_handles_multiple_files() {
     let repo = setup();
-    let config = Config::build().unwrap();
+    let config = get_config();
     let args = DiffArgs {
         from: Some(repo.commits[1].to_owned()),
         to: repo.commits[2].to_owned(),
@@ -209,7 +245,7 @@ fn it_handles_multiple_files() {
 #[test]
 fn it_handles_revision_specs() {
     let repo = setup();
-    let config = Config::build().unwrap();
+    let config = get_config();
     let args = DiffArgs {
         from: Some("HEAD^1".to_string()),
         to: "HEAD".to_string(),
