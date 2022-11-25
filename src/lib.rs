@@ -16,7 +16,7 @@ use config::*;
 
 mod diff;
 
-mod db;
+pub mod db;
 use db::*;
 
 mod repo;
