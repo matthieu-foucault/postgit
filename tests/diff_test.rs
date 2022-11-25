@@ -54,6 +54,22 @@ fn setup() -> Repo {
         .output()
         .unwrap();
 
+    Command::new("git")
+        .arg("config")
+        .arg("user.email")
+        .arg("test@example.com")
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .arg("config")
+        .arg("user.name")
+        .arg("test")
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+
     fs::write(
         &schema_file_path,
         r#"create schema my_app;
