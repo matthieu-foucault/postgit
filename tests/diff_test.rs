@@ -1,3 +1,4 @@
+use git_repository::bstr::ByteSlice;
 use postgit::{self, config::Config, DiffArgs};
 use std::fs;
 use std::process::Command;
@@ -10,20 +11,26 @@ struct Repo {
 }
 
 fn commit_all(repo_path: &str) -> String {
-    Command::new("git")
+    let add_out = Command::new("git")
         .arg("add")
         .arg(".")
         .current_dir(repo_path)
         .output()
         .unwrap();
 
-    Command::new("git")
+    println!("{}", add_out.stdout.to_str().unwrap());
+    println!("{}", add_out.stderr.to_str().unwrap());
+
+    let commit_out = Command::new("git")
         .arg("commit")
         .arg("-m")
         .arg("some message")
         .current_dir(repo_path)
         .output()
         .unwrap();
+
+    println!("{}", commit_out.stdout.to_str().unwrap());
+    println!("{}", commit_out.stderr.to_str().unwrap());
 
     let output = Command::new("git")
         .arg("rev-parse")
