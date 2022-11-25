@@ -3,6 +3,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+#[derive(Debug)]
 struct Repo {
     repo_path: String,
     commits: Vec<String>,
@@ -108,6 +109,7 @@ fn setup() -> Repo {
 #[test]
 fn it_returns_diff_string() {
     let repo = setup();
+    println!("Repo created: {repo:?}");
     let config = Config::build().unwrap();
     let args = DiffArgs {
         from: Some(repo.commits[0].to_owned()),
