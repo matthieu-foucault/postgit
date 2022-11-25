@@ -1,28 +1,36 @@
+use git_repository::bstr::ByteSlice;
 use postgit::{self, config::Config, DiffArgs};
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+#[derive(Debug)]
 struct Repo {
     repo_path: String,
     commits: Vec<String>,
 }
 
 fn commit_all(repo_path: &str) -> String {
-    Command::new("git")
+    let add_out = Command::new("git")
         .arg("add")
         .arg(".")
         .current_dir(repo_path)
         .output()
         .unwrap();
 
-    Command::new("git")
+    println!("{}", add_out.stdout.to_str().unwrap());
+    println!("{}", add_out.stderr.to_str().unwrap());
+
+    let commit_out = Command::new("git")
         .arg("commit")
         .arg("-m")
         .arg("some message")
         .current_dir(repo_path)
         .output()
         .unwrap();
+
+    println!("{}", commit_out.stdout.to_str().unwrap());
+    println!("{}", commit_out.stderr.to_str().unwrap());
 
     let output = Command::new("git")
         .arg("rev-parse")
@@ -42,6 +50,22 @@ fn setup() -> Repo {
 
     Command::new("git")
         .arg("init")
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .arg("config")
+        .arg("user.email")
+        .arg("test@example.com")
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .arg("config")
+        .arg("user.name")
+        .arg("test")
         .current_dir(&repo_path)
         .output()
         .unwrap();
@@ -108,6 +132,7 @@ fn setup() -> Repo {
 #[test]
 fn it_returns_diff_string() {
     let repo = setup();
+    println!("Repo created: {repo:?}");
     let config = Config::build().unwrap();
     let args = DiffArgs {
         from: Some(repo.commits[0].to_owned()),
