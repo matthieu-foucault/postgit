@@ -29,6 +29,10 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - run: pip install psycopg2-binary migra
       - uses: actions-rs/cargo@v1
         with:
           command: test -- --test-threads 1
