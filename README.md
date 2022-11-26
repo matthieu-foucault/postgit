@@ -1,10 +1,18 @@
 # PostGit
 
-POC - Use the power of Git for PostgreSQL schema migrations
+The goal of PostGit is to integrate PostgreSQL schema diffing tools (e.g. `migra`) with Git to provide a modern development experience for PostgreSQL schemas.
+
+This is a proof-of-concept, which started as my Hackathon Onboarding Project with [Commit](https://commit.dev/). Contributors are welcome.
+
+## Concept
+
+The goal of PostGit is to enable PostgreSQL schema developers to write clean, refactorable SQL code which does not rely on a list of ordered migration files and does not require developers to write idempotent scripts.
+
+By leveraging an schema diffing tool, the `postgit push` command generates a migration script between two committed schemas and applies the migration to a target database.
 
 ## Prerequisites
 
-`pip install migra psycopg2-binary`
+The current default schema diffing tool, is `migra`, which can be installed by running `pip install migra psycopg2-binary`.
 
 ## Usage
 
