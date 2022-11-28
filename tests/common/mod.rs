@@ -4,6 +4,7 @@ use std::fs;
 use std::process::Command;
 use std::thread;
 use tempfile::tempdir;
+use tokio_postgres::{NoTls, Row};
 
 #[derive(Debug)]
 pub struct Repo {
@@ -161,4 +162,13 @@ pub fn setup() -> Repo {
         repo_path: repo_path.to_str().unwrap().to_string(),
         commits,
     }
+}
+
+#[tokio::main]
+pub async fn execute_statement(config: &tokio_postgres::Config, statement: &str) -> Vec<Row> {
+    let (client, connection) = config.connect(NoTls).await.unwrap();
+    tokio::spawn(connection);
+
+    let rows = client.query(statement, &[]).await.unwrap();
+    rows
 }

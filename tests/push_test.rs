@@ -1,18 +1,8 @@
 #![feature(thread_id_value)]
 
 mod common;
-use common::*;
+pub use common::*;
 use postgit::DiffArgs;
-use tokio_postgres::{NoTls, Row};
-
-#[tokio::main]
-async fn execute_statement(config: &tokio_postgres::Config, statement: &str) -> Vec<Row> {
-    let (client, connection) = config.connect(NoTls).await.unwrap();
-    tokio::spawn(connection);
-
-    let rows = client.query(statement, &[]).await.unwrap();
-    rows
-}
 
 #[test]
 fn it_pushes_initial_commit() {
