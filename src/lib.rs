@@ -56,7 +56,7 @@ pub fn get_diff_string(args: &DiffArgs, config: &Config) -> Result<String> {
 
     run_sql_script(&target_schema, &diff_target_tokio_config)?;
 
-    let diff = diff::run_migra(&config.diff_engine.source, &config.diff_engine.target)?;
+    let diff = diff::run_diff_command(&config.diff_engine)?;
 
     drop_db(&diff_source_tokio_config)?;
     drop_db(&diff_target_tokio_config)?;
@@ -74,6 +74,12 @@ pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
 
     println!("watching {} ...", &args.path);
     debouncer.watcher().watch(path, RecursiveMode::Recursive)?;
+
+    let watch_config = DiffEngineConfig {
+        command: config.diff_engine.command.clone(),
+        source: config.target.clone(),
+        target: config.diff_engine.target.clone(),
+    };
 
     // just print all events, this blocks forever
     for e in rx.into_iter().flatten() {
@@ -95,7 +101,7 @@ pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
 
             run_sql_script(&source_schema, &diff_source_tokio_config)?;
 
-            let diff_string = diff::run_migra(&config.target, &config.diff_engine.source)?;
+            let diff_string = diff::run_diff_command(&watch_config)?;
 
             let target_tokio_config = config.target.to_tokio_postgres_config();
             run_sql_script(&diff_string, &target_tokio_config)?;
