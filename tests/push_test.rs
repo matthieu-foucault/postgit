@@ -1,7 +1,7 @@
 #![feature(thread_id_value)]
 
 mod common;
-use common::*;
+pub use common::*;
 use postgit::DiffArgs;
 
 #[test]

@@ -3,7 +3,7 @@
 use postgit::{self, DiffArgs};
 
 mod common;
-use common::*;
+pub use common::*;
 
 #[test]
 fn it_returns_diff_string() {

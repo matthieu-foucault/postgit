@@ -1,10 +1,9 @@
 #![feature(thread_id_value)]
 
 mod common;
-use std::{fs, thread, time::Duration};
-
-use common::*;
+pub use common::*;
 use postgit::WatchArgs;
+use std::{fs, thread, time::Duration};
 use tempfile::tempdir;
 
 #[test]
