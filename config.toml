@@ -1,4 +1,5 @@
 [diff_engine]
+command='migra --unsafe $1 $2'
 
 [diff_engine.source]
 dbname='postgres_vcs_source'

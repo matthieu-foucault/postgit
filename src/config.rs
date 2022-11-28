@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct PostgresConfig {
     user: Option<String>,
     dbname: Option<String>,
@@ -64,6 +64,7 @@ impl PostgresConfig {
 
 #[derive(Deserialize)]
 pub struct DiffEngineConfig {
+    pub command: Option<String>,
     pub source: PostgresConfig,
     pub target: PostgresConfig,
 }

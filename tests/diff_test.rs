@@ -99,3 +99,27 @@ fn it_handles_revision_specs() {
         diff_string
     );
 }
+
+#[test]
+fn it_handles_custom_commands() {
+    let repo = setup();
+    let mut config = get_config();
+    config.diff_engine.command = Some(r#"echo "$1 - $2""#.to_string());
+    let args = DiffArgs {
+        from: Some(repo.commits[0].to_owned()),
+        to: repo.commits[1].to_owned(),
+        path: String::from("schema.sql"),
+        repo_path: repo.repo_path,
+        source_path: None,
+    };
+
+    let diff_string = postgit::get_diff_string(&args, &config).unwrap();
+    assert_eq!(
+        format!(
+            "{} - {}",
+            config.diff_engine.source.to_url(),
+            config.diff_engine.target.to_url()
+        ),
+        diff_string
+    );
+}

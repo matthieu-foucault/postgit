@@ -10,11 +10,56 @@ The goal of PostGit is to enable PostgreSQL schema developers to write clean, re
 
 By leveraging an schema diffing tool, the `postgit push` command generates a migration script between two committed schemas and applies the migration to a target database.
 
-## Prerequisites
+## Diff engine
 
-The current default schema diffing tool, is `migra`, which can be installed by running `pip install migra psycopg2-binary`.
+PostGit relies on customisable external CLI tools to perform the schema diffing.
+
+The current default schema diffing tool is [`migra`](https://github.com/djrobstep/migra), which can be installed by running `pip install migra psycopg2-binary`.
+
+The diff tool can be configured with the `diff_engine.command` configuration option. The custom command must use two postgresql connection strings for the source and target databases as the positional arguments `$1` and `$2`, respectively.
+
+For instance, to use migra, the `config.toml` would contain the following:
+
+```toml
+[diff_engine]
+command='migra --unsafe $1 $2'
+```
+
+Using the CLI version of `pgAdmin4` can be done with
+
+```toml
+[diff_engine]
+command='docker run supabase/pgadmin-schema-diff $1 $2'
+```
 
 ## Usage
+
+### Config file
+
+A local `config.toml` file is required to tell PostGit how to connect to the database used for schema diffing, e.g.
+
+```toml
+[diff_engine]
+command='migra --unsafe $1 $2'
+
+[diff_engine.source]
+dbname='postgres_vcs_source'
+host='localhost'
+port=5432
+user='postgres'
+
+[diff_engine.target]
+dbname='postgres_vcs_target'
+host='localhost'
+port=5432
+user='postgres'
+
+[target]
+dbname='postgit_test'
+host='localhost'
+port=5432
+user='postgres'
+```
 
 ### Diff command
 
