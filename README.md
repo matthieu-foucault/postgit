@@ -8,58 +8,9 @@ This is a proof-of-concept, which started as my Hackathon Onboarding Project wit
 
 The goal of PostGit is to enable PostgreSQL schema developers to write clean, refactorable SQL code which does not rely on a list of ordered migration files and does not require developers to write idempotent scripts.
 
-By leveraging an schema diffing tool, the `postgit push` command generates a migration script between two committed schemas and applies the migration to a target database.
-
-## Diff engine
-
-PostGit relies on customisable external CLI tools to perform the schema diffing.
-
-The current default schema diffing tool is [`migra`](https://github.com/djrobstep/migra), which can be installed by running `pip install migra psycopg2-binary`.
-
-The diff tool can be configured with the `diff_engine.command` configuration option. The custom command must use two postgresql connection strings for the source and target databases as the positional arguments `$1` and `$2`, respectively.
-
-For instance, to use migra, the `config.toml` would contain the following:
-
-```toml
-[diff_engine]
-command='migra --unsafe $1 $2'
-```
-
-Using the CLI version of `pgAdmin4` can be done with
-
-```toml
-[diff_engine]
-command='docker run supabase/pgadmin-schema-diff $1 $2'
-```
+By leveraging a schema diffing tool, the `postgit push` command generates a migration script between two committed schemas and applies the migration to a target database.
 
 ## Usage
-
-### Config file
-
-A local `config.toml` file is required to tell PostGit how to connect to the database used for schema diffing, e.g.
-
-```toml
-[diff_engine]
-command='migra --unsafe $1 $2'
-
-[diff_engine.source]
-dbname='postgres_vcs_source'
-host='localhost'
-port=5432
-user='postgres'
-
-[diff_engine.target]
-dbname='postgres_vcs_target'
-host='localhost'
-port=5432
-user='postgres'
-
-[target]
-dbname='postgit_test'
-host='localhost'
-port=5432
-user='postgres'
-```
 
 ### Diff command
 
@@ -103,3 +54,64 @@ Usage: `postgit watch <PATH>`
 
 Arguments:
 `<PATH>` Path to the directory to watch
+
+### Configuration
+
+The behaviour of PostGit can be configured through a combination of configuration file and command line arguments.
+
+#### PostgreSQL config
+
+PostGit relies on three databases:
+
+- a diff engine source and a target where the respective schemas are deployed for the `diff` command. Those databases should only be used by PostGit as they are dropped and recreated every time
+- a target database where the migrations from the `push` and `watch` commands are applied
+
+A local `postgit.toml` file can be used to define the PostgreSQL connection parameters. The default configuration is equivalent to the following
+
+```toml
+[diff_engine]
+
+[diff_engine.source]
+dbname='postgit_diff_source'
+host='localhost'
+port=5432
+user='postgres'
+
+[diff_engine.target]
+dbname='postgit_diff_target'
+host='localhost'
+port=5432
+user='postgres'
+
+[target]
+dbname='postgres'
+host='localhost'
+port=5432
+user='postgres'
+```
+
+PostGit supports the following [`libpq` environment variables](https://www.postgresql.org/docs/current/libpq-envars.html) for all three databases (the `postgit.toml` file takes precedence over env variables): `PGHOST`, `PGUSER`, `PGPORT`.
+
+The `PGDATABASE` env variable can be used to specify the `target` database name.
+
+#### Diff engine
+
+PostGit relies on customisable external CLI tools to perform the schema diffing.
+
+The current default schema diffing tool is [`migra`](https://github.com/djrobstep/migra), which can be installed by running `pip install migra psycopg2-binary`.
+
+The diff tool can be configured with the `diff_engine.command` configuration option. The custom command must use two postgresql connection strings for the source and target databases as the positional arguments `$1` and `$2`, respectively.
+
+For instance, to use migra, the `config.toml` would contain the following (the default behaviour is equivalent to this configuration):
+
+```toml
+[diff_engine]
+command='migra --unsafe $1 $2'
+```
+
+Using the [CLI version of `pgAdmin4`](https://supabase.com/blog/supabase-cli#choosing-the-best-diff-tool) can be done with
+
+```toml
+[diff_engine]
+command='docker run --network=host supabase/pgadmin-schema-diff $1 $2'
+```
