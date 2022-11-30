@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct PostgresConfig {
     #[serde(default = "default_user")]
     user: String,
@@ -18,15 +18,15 @@ pub struct PostgresConfig {
 }
 
 fn default_user() -> String {
-    env::var("PGUSER").unwrap_or("postgres".to_string())
+    env::var("PGUSER").unwrap_or_else(|_| "postgres".to_string())
 }
 
 fn default_db() -> String {
-    env::var("PGDATABASE").unwrap_or(default_user())
+    env::var("PGDATABASE").unwrap_or_else(|_| default_user())
 }
 
 fn default_host() -> String {
-    env::var("PGHOST").unwrap_or("localhost".to_string())
+    env::var("PGHOST").unwrap_or_else(|_| "localhost".to_string())
 }
 
 fn default_port() -> u16 {
@@ -77,7 +77,7 @@ impl Default for PostgresConfig {
     }
 }
 
-#[derive(Deserialize, PartialEq, Debug, Default)]
+#[derive(Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct DiffEngineConfig {
     pub command: Option<String>,
     #[serde(default)]
@@ -86,7 +86,7 @@ pub struct DiffEngineConfig {
     pub target: PostgresConfig,
 }
 
-#[derive(Deserialize, PartialEq, Debug)]
+#[derive(Deserialize, PartialEq, Eq, Debug)]
 pub struct Config {
     #[serde(default)]
     pub diff_engine: DiffEngineConfig,
