@@ -77,6 +77,19 @@ impl Default for PostgresConfig {
     }
 }
 
+#[derive(Deserialize, PartialEq, Eq, Debug)]
+pub struct WatchConfig {
+    pub recreate_db_on_fail: bool,
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        WatchConfig {
+            recreate_db_on_fail: true,
+        }
+    }
+}
+
 #[derive(Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct DiffEngineConfig {
     pub command: Option<String>,
@@ -92,6 +105,8 @@ pub struct Config {
     pub diff_engine: DiffEngineConfig,
     #[serde(default)]
     pub target: PostgresConfig,
+    #[serde(default)]
+    pub watch: WatchConfig,
 }
 
 impl Config {
@@ -152,6 +167,9 @@ mod tests {
                     dbname: "postgres".to_string(),
                     host: "localhost".to_string(),
                     port: 5432
+                },
+                watch: WatchConfig {
+                    recreate_db_on_fail: true
                 }
             },
             config
@@ -188,6 +206,9 @@ mod tests {
         host='target_host'
         port=3214
         user='target_user'
+
+        [watch]
+        recreate_db_on_fail=false
         "#,
         )
         .unwrap();
@@ -216,6 +237,9 @@ mod tests {
                     dbname: "target_db".to_string(),
                     host: "target_host".to_string(),
                     port: 3214
+                },
+                watch: WatchConfig {
+                    recreate_db_on_fail: false
                 }
             },
             config

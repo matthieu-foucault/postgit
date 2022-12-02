@@ -4,6 +4,7 @@ use notify::RecursiveMode;
 use notify_debouncer_mini::new_debouncer;
 use std::ffi::OsStr;
 use std::fs::{self};
+use std::io::{self, Write};
 use std::path::Path;
 use std::time::Duration;
 use walkdir::WalkDir;
@@ -78,7 +79,7 @@ pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
     let watch_config = DiffEngineConfig {
         command: config.diff_engine.command.clone(),
         source: config.target.clone(),
-        target: config.diff_engine.target.clone(),
+        target: config.diff_engine.source.clone(),
     };
 
     // just print all events, this blocks forever
@@ -86,7 +87,8 @@ pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
         if e.iter()
             .any(|event| event.path.extension() == sql_extension)
         {
-            println!("Deploying changes");
+            print!("deploying changes ");
+            io::stdout().flush()?;
             let diff_source_tokio_config = config.diff_engine.source.to_tokio_postgres_config();
             drop_db(&diff_source_tokio_config)?;
             create_db(&diff_source_tokio_config)?;
@@ -99,12 +101,41 @@ pub fn watch(args: &WatchArgs, config: &Config) -> Result<()> {
                 }
             }
 
-            run_sql_script(&source_schema, &diff_source_tokio_config)?;
+            let source_deploy_result = run_sql_script(&source_schema, &diff_source_tokio_config);
 
-            let diff_string = diff::run_diff_command(&watch_config)?;
+            match source_deploy_result {
+                Err(err) => {
+                    println!("❌");
+                    eprintln!("The schema in the watched directory could not be deployed.");
+                    eprintln!("{}", err);
+                }
+                Ok(_) => {
+                    let mut diff_string = diff::run_diff_command(&watch_config)?;
 
-            let target_tokio_config = config.target.to_tokio_postgres_config();
-            run_sql_script(&diff_string, &target_tokio_config)?;
+                    let target_tokio_config = config.target.to_tokio_postgres_config();
+                    let apply_diff_result = run_sql_script(&diff_string, &target_tokio_config);
+                    if let Err(err) = apply_diff_result {
+                        println!("❌");
+                        eprintln!("Could not apply the changes to the target db.\n{}", err);
+                        if config.watch.recreate_db_on_fail {
+                            println!("Recreating target db");
+                            drop_db(&target_tokio_config)?;
+                            create_db(&target_tokio_config)?;
+                            diff_string = diff::run_diff_command(&watch_config)?;
+                            run_sql_script(&diff_string, &target_tokio_config).unwrap_or_else(
+                                |err| {
+                                    eprintln!(
+                                        "Failed again, retrying on the next file change.\n{}",
+                                        err
+                                    );
+                                },
+                            );
+                        }
+                    } else {
+                        println!("✓");
+                    }
+                }
+            }
         }
     }
 
