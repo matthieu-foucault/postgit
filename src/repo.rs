@@ -4,7 +4,6 @@ use git_repository::objs::tree::EntryMode;
 use git_repository::traverse::tree::Recorder;
 use git_repository::{Commit, Repository};
 use petgraph::algo::toposort;
-use petgraph::dot::{Config, Dot};
 use petgraph::prelude::DiGraphMap;
 use regex::Regex;
 use std::collections::HashMap;
@@ -63,7 +62,7 @@ fn try_find_commit<'repo>(
 }
 
 fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
-    let import_regex = Regex::new(r"(m?)^.*--\s*import\s+(.*)$").unwrap();
+    let import_regex = Regex::new(r"(?m)^.*--\s*import\s+(.*)$").unwrap();
     let mut edges: Vec<(String, String)> = vec![];
     for (k, v) in sql_scripts.iter() {
         let mut parent = "".to_string();
@@ -76,9 +75,8 @@ fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
             parent = full_file_path;
         }
 
-        // TODO: doesn't look like this works?
         for group in import_regex.captures_iter(v) {
-            edges.push((group[0].to_string(), k.to_string()));
+            edges.push((group[1].to_string(), k.to_string()));
         }
     }
 
@@ -88,7 +86,6 @@ fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
         .collect();
 
     let graph = DiGraphMap::<_, ()>::from_edges(str_edges);
-    println!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
     let sorted_nodes = toposort(&graph, None);
     match sorted_nodes {
         Ok(nodes) => Ok(nodes
@@ -108,22 +105,22 @@ fn it_merges_sql_scripts_in_order() {
         "schema/a",
         r#"-- import schema/b
 
-    create table foo.bar(
-        id int primary key
-    );
-    "#,
+create table foo.bar(
+    id int primary key
+);
+"#,
     );
     scripts.insert("schema/b", r#"create schema foo;"#);
 
     let merged_script = merge_sql_scripts(&scripts);
     assert_eq!(
         r#"create schema foo;
-    -- import schema/b
+-- import schema/b
 
-    create table foo.bar(
-        id int primary key
-    );
-    "#
+create table foo.bar(
+    id int primary key
+);
+"#
         .to_string(),
         merged_script.unwrap()
     );
