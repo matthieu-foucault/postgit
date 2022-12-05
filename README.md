@@ -115,3 +115,32 @@ Using the [CLI version of `pgAdmin4`](https://supabase.com/blog/supabase-cli#cho
 [diff_engine]
 command='docker run --network=host supabase/pgadmin-schema-diff $1 $2'
 ```
+
+## SQL files management
+
+As your database schema grows, you will most likely want to split your SQL code into multiple files.
+To allow you to load multiple files in the desired order, PostGit supports a custom `-- import` syntax, e.g.:
+
+`schema/schema.sql`
+
+```sql
+create schema my_app;
+```
+
+`schema/user.sql`
+
+```sql
+-- import schema/schema.sql
+
+create table my_app.user (
+  id int primary key generated always as identity,
+  given_name text not null,
+  family_name text,
+  email text not null
+);
+```
+
+**Important**:
+
+- The paths specified in the import statements must be relative paths from the root of the repository.
+- If you do not specify imports, all the files in the specified directory will be imported in an arbitrary, non-deterministic order.

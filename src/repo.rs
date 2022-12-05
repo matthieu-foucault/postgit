@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use git_repository::bstr::ByteSlice;
 use git_repository::objs::tree::EntryMode;
 use git_repository::traverse::tree::Recorder;
-use git_repository::{Commit, Repository};
+use git_repository::{Commit, Object, Repository};
 use petgraph::algo::toposort;
 use petgraph::prelude::DiGraphMap;
 use regex::Regex;
@@ -26,22 +26,35 @@ pub fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) 
 
         tree.traverse().breadthfirst::<Recorder>(&mut recorder)?;
 
-        let object_iter = recorder
+        let objects_with_path = recorder
             .records
             .iter()
             .filter(|entry| {
                 matches!(entry.mode, EntryMode::Blob)
                     && entry.filepath.to_path().unwrap().starts_with(schema_path)
             })
-            .map(|entry| repo.find_object(entry.oid))
-            .filter_map(Result::ok);
+            .filter_map(|entry| match repo.find_object(entry.oid) {
+                Ok(object) => Some((entry.filepath.to_str().unwrap(), object)),
+                Err(err) => {
+                    eprintln!("Could not find object with id {}:/n{}", entry.oid, err);
+                    None
+                }
+            })
+            .collect::<Vec<(&str, Object)>>();
 
-        let mut script = String::new();
-        for object in object_iter {
-            script.push_str(object.data.to_str()?);
+        if objects_with_path.len() == 1 {
+            let script = objects_with_path[0].1.data.to_str()?.to_string();
+            Ok(script)
+        } else {
+            let scripts = objects_with_path
+                .iter()
+                .map(|(path, object)| (*path, object.data.to_str().unwrap()))
+                .collect::<HashMap<&str, &str>>();
+
+            let script = merge_sql_scripts(&scripts)?;
+
+            Ok(script)
         }
-
-        Ok(script)
     } else {
         bail!("Didn't find source commit for ref {}", ref_or_sha1);
     }
