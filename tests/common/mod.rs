@@ -138,15 +138,12 @@ pub fn setup() -> Repo {
 
     fs::create_dir(repo_path.join("schema")).unwrap();
 
-    fs::write(
-        repo_path.join("schema/001_schema.sql"),
-        "create schema my_app;",
-    )
-    .unwrap();
+    fs::write(repo_path.join("schema/schema.sql"), "create schema my_app;").unwrap();
 
     fs::write(
-        repo_path.join("schema/002_user.sql"),
+        repo_path.join("schema/user.sql"),
         r#"
+          -- import schema/schema.sql
           create table my_app.user (
             id int primary key generated always as identity,
             given_name text not null,
