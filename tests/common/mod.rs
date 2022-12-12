@@ -2,7 +2,6 @@ use git_repository::bstr::ByteSlice;
 use postgit::config::*;
 use std::fs;
 use std::process::Command;
-use std::thread;
 use tempfile::tempdir;
 use tokio_postgres::{NoTls, Row};
 
@@ -12,8 +11,14 @@ pub struct Repo {
     pub commits: Vec<String>,
 }
 
+fn id() -> usize {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static ID: AtomicUsize = AtomicUsize::new(0);
+    ID.fetch_add(1, Ordering::SeqCst)
+}
+
 pub fn get_config() -> Config {
-    let thread_id = thread::current().id().as_u64();
+    let thread_id = id();
     let config: Config = toml::from_str(
         format!(
             "
@@ -166,6 +171,5 @@ pub async fn execute_statement(config: &tokio_postgres::Config, statement: &str)
     let (client, connection) = config.connect(NoTls).await.unwrap();
     tokio::spawn(connection);
 
-    let rows = client.query(statement, &[]).await.unwrap();
-    rows
+    client.query(statement, &[]).await.unwrap()
 }

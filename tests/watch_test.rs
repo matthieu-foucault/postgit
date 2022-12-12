@@ -1,5 +1,3 @@
-#![feature(thread_id_value)]
-
 mod common;
 pub use common::*;
 use postgit::WatchArgs;
