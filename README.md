@@ -119,7 +119,27 @@ command='docker run --network=host supabase/pgadmin-schema-diff $1 $2'
 ## SQL files management
 
 As your database schema grows, you will most likely want to split your SQL code into multiple files.
-To allow you to load multiple files in the desired order, PostGit supports a custom `-- import` syntax, e.g.:
+To allow you to load multiple files in the desired order, PostGit supports:
+
+- loading files in lexicographic path order
+- a custom `-- import` syntax
+
+### Lexicographic path order (e.g. using numbered prefixes)
+
+You can rely on file naming to define the file loading order, e.g., given the following file hierarchy
+
+- `schema/`
+  - `001_dir/`
+    - `001_file_a.sql`
+    - `002_file_b.sql`
+  - `002_file_c.sql`
+  - `003_dir/`
+    - `001_file_d.sql`
+    - `002_file_e.sql`
+
+The files will be imported in the "a,b,c,d,e" order.
+
+### `--import` syntax
 
 `schema/schema.sql`
 
@@ -143,4 +163,3 @@ create table my_app.user (
 **Important**:
 
 - The paths specified in the import statements must be relative paths from the root of the repository.
-- If you do not specify imports, all the files in the specified directory will be imported in lexicographical sorting order of their paths (i.e. in BFS order)

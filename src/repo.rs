@@ -171,3 +171,30 @@ fn it_merges_sql_scripts_in_bfs_order() {
     let merged_script = merge_sql_scripts(&scripts);
     assert_eq!("1\n2\n3\n4\n5".to_string(), merged_script.unwrap());
 }
+
+#[test]
+fn it_merges_scripts_in_order_with_some_imports() {
+    let mut scripts = HashMap::new();
+    scripts.insert("a/b/c", "c");
+    scripts.insert("a/b/d", "d");
+    scripts.insert(
+        "a/e",
+        r#"-- import a/b/d
+-- import a/f/h
+e"#,
+    );
+    scripts.insert("a/f/g", "g");
+    scripts.insert("a/f/h", "h");
+
+    let merged_script = merge_sql_scripts(&scripts).unwrap();
+    let lines: Vec<&str> = merged_script.lines().collect();
+
+    assert!(
+        lines.iter().position(|l| l.starts_with('d')).unwrap()
+            < lines.iter().position(|l| l.starts_with('e')).unwrap()
+    );
+    assert!(
+        lines.iter().position(|l| l.starts_with('h')).unwrap()
+            < lines.iter().position(|l| l.starts_with('e')).unwrap()
+    );
+}
