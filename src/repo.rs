@@ -5,6 +5,7 @@ use git_repository::traverse::tree::Recorder;
 use git_repository::{Commit, Object, Repository};
 use petgraph::algo::toposort;
 use petgraph::prelude::DiGraphMap;
+use petgraph::Direction;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
@@ -76,17 +77,11 @@ fn try_find_commit<'repo>(
 
 fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
     let import_regex = Regex::new(r"(?m)^.*--\s*import\s+(.*)$").unwrap();
+    let mut graph = DiGraphMap::<&str, ()>::new();
+
     let mut edges: Vec<(String, String)> = vec![];
     for (k, v) in sql_scripts.iter() {
-        let mut parent = "".to_string();
-        for path_part in k.split('/') {
-            let mut full_file_path = path_part.to_string();
-            if !parent.is_empty() {
-                full_file_path = parent.clone() + "/" + path_part;
-                edges.push((parent.clone(), full_file_path.clone()));
-            }
-            parent = full_file_path;
-        }
+        graph.add_node(k);
 
         for group in import_regex.captures_iter(v) {
             edges.push((group[1].to_string(), k.to_string()));
@@ -98,7 +93,32 @@ fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
         .map(|(x, y)| (x.as_str(), y.as_str()))
         .collect();
 
-    let graph = DiGraphMap::<_, ()>::from_edges(str_edges);
+    for e in str_edges {
+        graph.add_edge(e.0, e.1, ());
+    }
+
+    let mut ordered_keys: Vec<&&str> = sql_scripts.keys().collect();
+    ordered_keys.sort();
+
+    // make sure every node has an edge, to have a deterministic topo sort
+    for i in 0..ordered_keys.len() {
+        if graph
+            .neighbors_directed(ordered_keys[i], Direction::Incoming)
+            .count()
+            == 0
+            && graph
+                .neighbors_directed(ordered_keys[i], Direction::Outgoing)
+                .count()
+                == 0
+        {
+            if i == 0 {
+                graph.add_edge(ordered_keys[0], ordered_keys[1], ());
+            } else {
+                graph.add_edge(ordered_keys[i - 1], ordered_keys[i], ());
+            }
+        }
+    }
+
     let sorted_nodes = toposort(&graph, None);
     match sorted_nodes {
         Ok(nodes) => Ok(nodes
@@ -137,4 +157,17 @@ create table foo.bar(
         .to_string(),
         merged_script.unwrap()
     );
+}
+
+#[test]
+fn it_merges_sql_scripts_in_bfs_order() {
+    let mut scripts = HashMap::new();
+    scripts.insert("a/b/c", "1");
+    scripts.insert("a/b/d", "2");
+    scripts.insert("a/e", "3");
+    scripts.insert("a/f/g", "4");
+    scripts.insert("a/f/h", "5");
+
+    let merged_script = merge_sql_scripts(&scripts);
+    assert_eq!("1\n2\n3\n4\n5".to_string(), merged_script.unwrap());
 }

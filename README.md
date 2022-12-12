@@ -143,4 +143,4 @@ create table my_app.user (
 **Important**:
 
 - The paths specified in the import statements must be relative paths from the root of the repository.
-- If you do not specify imports, all the files in the specified directory will be imported in an arbitrary, non-deterministic order.
+- If you do not specify imports, all the files in the specified directory will be imported in lexicographical sorting order of their paths (i.e. in BFS order)
