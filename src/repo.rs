@@ -8,7 +8,7 @@ use petgraph::prelude::DiGraphMap;
 use petgraph::Direction;
 use regex::Regex;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 pub fn get_schema_script(repo_path: &str, ref_or_sha1: &str, schema_path: &str) -> Result<String> {
     let repo_path = Path::new(repo_path);
@@ -75,6 +75,20 @@ fn try_find_commit<'repo>(
     }
 }
 
+/// Naive path normalization, removing occurences of `..` and `.` without supporting symlinks or checking whether files exists
+/// The provided path must not start with `..`
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        if component == Component::ParentDir {
+            normalized.pop();
+        } else if component != Component::CurDir {
+            normalized.push(component);
+        }
+    }
+    normalized
+}
+
 fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
     let import_regex = Regex::new(r"(?m)^.*--\s*import\s+(.*)$").unwrap();
     let mut graph = DiGraphMap::<&str, ()>::new();
@@ -84,7 +98,17 @@ fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
         graph.add_node(k);
 
         for group in import_regex.captures_iter(v) {
-            edges.push((group[1].to_string(), k.to_string()));
+            let mut import_path = PathBuf::from(group[1].to_string());
+            let first_component = import_path.components().next();
+            if first_component == Some(std::path::Component::CurDir)
+                || first_component == Some(std::path::Component::ParentDir)
+            {
+                import_path = PathBuf::from(k);
+                import_path.pop();
+                import_path.push(PathBuf::from(group[1].to_string()));
+            }
+            let normalized_path = normalize_path(import_path.as_path());
+            edges.push((normalized_path.display().to_string(), k.to_string()));
         }
     }
 
@@ -195,6 +219,33 @@ e"#,
     );
     assert!(
         lines.iter().position(|l| l.starts_with('h')).unwrap()
+            < lines.iter().position(|l| l.starts_with('e')).unwrap()
+    );
+}
+
+#[test]
+fn it_imports_with_relative_paths() {
+    let mut scripts = HashMap::new();
+    scripts.insert("a", "a");
+    scripts.insert("b/c", "c");
+    scripts.insert(
+        "b/d/e",
+        r#"
+-- import ../c
+-- import ./f
+e"#,
+    );
+    scripts.insert("b/d/f", "f");
+
+    let merged_script = merge_sql_scripts(&scripts).unwrap();
+    let lines: Vec<&str> = merged_script.lines().collect();
+
+    assert!(
+        lines.iter().position(|l| l.starts_with('c')).unwrap()
+            < lines.iter().position(|l| l.starts_with('e')).unwrap()
+    );
+    assert!(
+        lines.iter().position(|l| l.starts_with('f')).unwrap()
             < lines.iter().position(|l| l.starts_with('e')).unwrap()
     );
 }
