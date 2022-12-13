@@ -1,5 +1,3 @@
-#![feature(thread_id_value)]
-
 use postgit::{self, DiffArgs};
 
 mod common;
