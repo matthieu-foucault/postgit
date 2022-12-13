@@ -160,6 +160,7 @@ create table my_app.user (
 );
 ```
 
-**Important**:
+**Import file resolution**:
 
-- The paths specified in the import statements must be relative paths from the root of the repository.
+- Paths starting with `./` or `../` are resolved relatively to the file's directory
+- Other paths are resolved from the repository root
