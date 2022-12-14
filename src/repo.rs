@@ -89,7 +89,7 @@ fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
+pub fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
     let import_regex = Regex::new(r"(?m)^.*--\s*import\s+(.*)$").unwrap();
     let mut graph = DiGraphMap::<&str, ()>::new();
 
@@ -122,23 +122,25 @@ fn merge_sql_scripts(sql_scripts: &HashMap<&str, &str>) -> Result<String> {
     }
 
     let mut ordered_keys: Vec<&&str> = sql_scripts.keys().collect();
-    ordered_keys.sort();
+    if ordered_keys.len() > 1 {
+        ordered_keys.sort();
 
-    // make sure every node has an edge, to have a deterministic topo sort
-    for i in 0..ordered_keys.len() {
-        if graph
-            .neighbors_directed(ordered_keys[i], Direction::Incoming)
-            .count()
-            == 0
-            && graph
-                .neighbors_directed(ordered_keys[i], Direction::Outgoing)
+        // make sure every node has an edge, to have a deterministic topo sort
+        for i in 0..ordered_keys.len() {
+            if graph
+                .neighbors_directed(ordered_keys[i], Direction::Incoming)
                 .count()
                 == 0
-        {
-            if i == 0 {
-                graph.add_edge(ordered_keys[0], ordered_keys[1], ());
-            } else {
-                graph.add_edge(ordered_keys[i - 1], ordered_keys[i], ());
+                && graph
+                    .neighbors_directed(ordered_keys[i], Direction::Outgoing)
+                    .count()
+                    == 0
+            {
+                if i == 0 {
+                    graph.add_edge(ordered_keys[0], ordered_keys[1], ());
+                } else {
+                    graph.add_edge(ordered_keys[i - 1], ordered_keys[i], ());
+                }
             }
         }
     }

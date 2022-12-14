@@ -5,7 +5,6 @@ use std::{fs, thread, time::Duration};
 use tempfile::tempdir;
 
 #[test]
-#[ignore = "skipping for now"]
 fn it_watches_file_writes() {
     let config = get_config();
     let target_config = config.target.to_tokio_postgres_config();
@@ -15,6 +14,7 @@ fn it_watches_file_writes() {
     };
 
     thread::spawn(move || postgit::watch(&args, &config));
+    thread::sleep(Duration::from_secs(1));
 
     let mut schema_file_path = dir.clone();
     schema_file_path.push("001_schema.sql");
@@ -45,7 +45,6 @@ fn it_watches_file_writes() {
 }
 
 #[test]
-#[ignore = "skipping for now"]
 fn it_handles_errors_in_sql_files() {
     let config = get_config();
     let target_config = config.target.to_tokio_postgres_config();

@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use notify::RecursiveMode;
 use notify_debouncer_mini::new_debouncer;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::{self};
 use std::io::{self, Write};
@@ -22,6 +23,8 @@ use db::*;
 
 mod repo;
 use repo::get_schema_script;
+
+use crate::repo::merge_sql_scripts;
 
 pub fn apply_diff(args: &DiffArgs, config: &Config) -> Result<()> {
     let diff_string = get_diff_string(args, config)?;
@@ -74,13 +77,19 @@ pub fn deploy_changes(config: &Config, path: &Path, watch_config: &DiffEngineCon
     drop_db(&diff_source_tokio_config)?;
     create_db(&diff_source_tokio_config)?;
 
-    let mut source_schema = String::new();
+    let file_entries = WalkDir::new(path)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.path().extension() == sql_extension)
+        .map(|e| (e.path().to_owned(), fs::read_to_string(e.path()).unwrap()))
+        .collect::<Vec<_>>();
 
-    for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
-        if entry.path().extension() == sql_extension {
-            source_schema += &fs::read_to_string(entry.path())?;
-        }
-    }
+    let sql_scripts = file_entries
+        .iter()
+        .map(|e| (e.0.to_str().unwrap(), e.1.as_str()))
+        .collect::<HashMap<&str, &str>>();
+
+    let source_schema = merge_sql_scripts(&sql_scripts)?;
 
     let source_deploy_result = run_sql_script(&source_schema, &diff_source_tokio_config);
 
