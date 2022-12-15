@@ -1,5 +1,7 @@
 use git_repository::bstr::ByteSlice;
 use postgit::config::*;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
@@ -11,38 +13,33 @@ pub struct Repo {
     pub commits: Vec<String>,
 }
 
-fn id() -> usize {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static ID: AtomicUsize = AtomicUsize::new(0);
-    ID.fetch_add(1, Ordering::SeqCst)
-}
-
 pub fn get_config() -> Config {
-    let thread_id = id();
+    let mut rng = thread_rng();
+    let db_suffix: String = (0..7).map(|_| rng.sample(Alphanumeric) as char).collect();
     let config: Config = toml::from_str(
         format!(
             "
 [diff_engine]
 
 [diff_engine.source]
-dbname='postgres_vcs_source_{thread_id}'
+dbname='postgres_vcs_source_{db_suffix}'
 host='localhost'
 port=5432
 user='postgres'
 
 [diff_engine.target]
-dbname='postgres_vcs_target_{thread_id}'
+dbname='postgres_vcs_target_{db_suffix}'
 host='localhost'
 port=5432
 user='postgres'
 
 [target]
-dbname='postgit_test_{thread_id}'
+dbname='postgit_test_{db_suffix}'
 host='localhost'
 port=5432
 user='postgres'
     ",
-            thread_id = thread_id
+            db_suffix = db_suffix.to_lowercase()
         )
         .as_str(),
     )
