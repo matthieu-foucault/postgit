@@ -1,6 +1,6 @@
 mod common;
 pub use common::*;
-use postgit::{config::DiffEngineConfig, deploy_changes, WatchArgs};
+use postgit::{config::DiffEngineConfig, db::create_db, deploy_changes, WatchArgs};
 use std::{fs, thread, time::Duration};
 use tempfile::tempdir;
 
@@ -8,6 +8,7 @@ use tempfile::tempdir;
 fn it_watches_file_writes() {
     let config = get_config();
     let target_config = config.target.to_tokio_postgres_config();
+    create_db(&target_config).unwrap();
     let dir = tempdir().unwrap().into_path();
     let args = WatchArgs {
         path: dir.display().to_string(),
@@ -48,6 +49,7 @@ fn it_watches_file_writes() {
 fn it_handles_errors_in_sql_files() {
     let config = get_config();
     let target_config = config.target.to_tokio_postgres_config();
+    create_db(&target_config).unwrap();
     let dir = tempdir().unwrap().into_path();
     let args = WatchArgs {
         path: dir.display().to_string(),
@@ -96,6 +98,7 @@ fn it_handles_errors_in_sql_files() {
 fn it_handles_file_imports() {
     let config = get_config();
     let target_config = config.target.to_tokio_postgres_config();
+    create_db(&target_config).unwrap();
     let dir = tempdir().unwrap().into_path();
 
     let mut user_file_path = dir.clone();

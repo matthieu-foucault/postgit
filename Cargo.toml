@@ -20,4 +20,5 @@ toml = "0.5.9"
 walkdir = "2.3.2"
 
 [dev-dependencies]
+rand = "0.8.5"
 tempfile = "3.3.0"
